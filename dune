@@ -1,0 +1,6 @@
+(executable
+ (name twitter)
+ (libraries digestif.c graphql cohttp graphql-async async core cohttp-async graphql-cohttp yojson)
+ (modes native)
+ )
+
