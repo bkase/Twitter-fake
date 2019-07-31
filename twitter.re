@@ -170,8 +170,7 @@ let schema = () =>
 module Graphql_cohttp_async =
   Graphql_cohttp.Make(Graphql.Schema, Cohttp_async.Io, Cohttp_async.Body);
 
-let graphql_callback =
-  Graphql_cohttp_async.make_callback(_req => (), schema());
+let graphql_callback = Stupid_hack.make_callback(_req => (), schema());
 
 let server =
   Cohttp_async.(
@@ -186,7 +185,18 @@ let server =
         ),
       Tcp.Where_to_listen.(bind_to(All_addresses, On_port(9999))),
       (~body, _sock, req) =>
-      graphql_callback((), req, body)
+      switch (Cohttp_async.Request.meth(req)) {
+      | `OPTIONS =>
+        let h = Cohttp.Header.init();
+        let h = Cohttp.Header.add(h, "Access-Control-Allow-Origin", "*");
+        let h = Cohttp.Header.add(h, "Access-Control-Allow-Headers", "*");
+        let h = Cohttp.Header.add(h, "Access-Control-Allow-Methods", "*");
+        Deferred.map(
+          ~f=r => `Response(r),
+          Server.respond_string(~headers=h, ""),
+        );
+      | _ => graphql_callback((), req, body)
+      }
     )
   );
 
