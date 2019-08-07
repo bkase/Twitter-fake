@@ -89,13 +89,20 @@ module Tweet = {
 
     let typ: unit => typ(_, option(t)) =
       () =>
-        obj("TweetOutput", ~doc="Tweet fully filled out", ~fields=_ =>
+        obj("TweetOutput", ~doc="Information about a single tweet", ~fields=_ =>
           [Fields.message(), Fields.author(), Fields.timestamp()]
         );
   };
 };
 
-let model: ref(list(Tweet.Output0.t)) = ref([]);
+let model =
+  ref([
+    {
+      Tweet.message: "Hello reason friends!",
+      author: "Coda",
+      timestamp: Time.now(),
+    },
+  ]);
 
 module Mutation = {
   open Graphql.Schema;

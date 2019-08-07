@@ -14,17 +14,6 @@ module Params = {
     operation_name: option(string),
   };
   let empty = {query: None, variables: None, operation_name: None};
-  let of_uri_exn = uri => {
-    let variables =
-      Uri.get_query_param(uri, "variables")
-      |> Option.map(~f=Yojson.Basic.from_string)
-      |> Option.map(~f=Yojson.Basic.Util.to_assoc);
-    {
-      query: Uri.get_query_param(uri, "query"),
-      variables,
-      operation_name: Uri.get_query_param(uri, "operationName"),
-    };
-  };
   let of_json_body_exn = body =>
     if (body == "") {
       empty;
@@ -45,44 +34,27 @@ module Params = {
           ),
       };
     };
-  let of_graphql_body = body => {
-    query: Some(body),
-    variables: None,
-    operation_name: None,
-  };
-  let merge = (t, t') => {
-    query: Option.first_some(t.query, t'.query),
-    variables: Option.first_some(t.variables, t'.variables),
-    operation_name: Option.first_some(t.operation_name, t'.operation_name),
-  };
   let post_params_exn = (req, body) => {
     let headers = Cohttp.Request.headers(req);
     switch (Cohttp.Header.get(headers, "Content-Type")) {
-    | Some("application/graphql") => of_graphql_body(body)
     | Some("application/json") => of_json_body_exn(body)
     | _ => empty
     };
   };
-  let of_req_exn = (req, body) => {
-    let get_params = of_uri_exn(Cohttp.Request.uri(req));
-    let post_params = post_params_exn(req, body);
-    merge(get_params, post_params);
-  };
   let extract = (req, body) =>
     try (
       {
-        let params = of_req_exn(req, body);
+        let params = post_params_exn(req, body);
         switch (params.query) {
         | Some(query) =>
-          [@implicit_arity]
-          Ok(
+          Ok((
             query,
             (
               params.variables :>
                 option(list((string, Graphql_parser.const_value)))
             ),
             params.operation_name,
-          )
+          ))
         | None => Error("Must provide query string")
         };
       }
@@ -155,10 +127,10 @@ let make_callback = (make_context, schema, _conn, req: Cohttp.Request.t, body) =
     | Some(s) => List.mem("text/html", String.split_on_char(',', s))
     };
   switch (req.meth, path_parts, accept_html) {
+  | (`GET, ["graphql", _], true)
   | (`GET, ["graphql"], true) => static_file_response("index.html")
   | (`GET, ["graphql"], false) =>
     execute_request(schema, make_context(req), req, body)
-  | (`GET, ["graphql", path], _) => static_file_response(path)
   | (`POST, ["graphql"], _) =>
     execute_request(schema, make_context(req), req, body)
   | _ => respond_string(~status=`Not_found, ~body="", ())
